@@ -3,15 +3,14 @@ cmake_minimum_required (VERSION 3.7.1 FATAL_ERROR)
 # Only interpret if() arguments as variables or keywords when unquoted.
 cmake_policy(SET CMP0054 NEW) 
 
-# Hunter Package Manager init
-include("cmake/HunterGate.cmake")
-HunterGate(
-    URL "https://github.com/ruslo/hunter/archive/v0.17.10.tar.gz"
-    SHA1 "9dd07d0cae492bbbdf5d3049721b9526f4581b67"
-)
-
 # Project name and version
 project(leveldb VERSION 0.1 LANGUAGES CXX)
+
+# If the user did not customize the install prefix,
+# set it to live under build so we don't inadverently pollute /usr/local
+if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+    set (CMAKE_INSTALL_PREFIX "${CMAKE_BINARY_DIR}/_install" CACHE PATH "default install path" FORCE)
+endif()
 
 # Platform detection
 set(PROJECT_ADDITIONAL_DEFINES)
@@ -191,7 +190,7 @@ SOURCE_GROUP(port FILES ${PROJECT_PORT_SOURCES})
 SOURCE_GROUP(table FILES ${PROJECT_TABLE_SOURCES})
 SOURCE_GROUP(util FILES ${PROJECT_UTIL_SOURCES})
 
-add_library(${PROJECT_NAME} 
+add_library(leveldb 
     ${PROJECT_PUBLIC_HEADERS}
     ${PROJECT_DB_SOURCES}
     ${PROJECT_HELPERS_SOURCES}
@@ -200,10 +199,10 @@ add_library(${PROJECT_NAME}
     ${PROJECT_UTIL_SOURCES})
     
 # Target C++14
-set_property(TARGET ${PROJECT_NAME} PROPERTY CXX_STANDARD 14)
+set_property(TARGET leveldb PROPERTY CXX_STANDARD 14)
 
 # Set target compiler definitions
-target_compile_definitions(${PROJECT_NAME} PRIVATE
+target_compile_definitions(leveldb PRIVATE
     ${LEVELDB_PLATFORM}
     ${LEVELDB_OS}
     ${PROJECT_ADDITIONAL_DEFINES}
@@ -213,30 +212,48 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
 # ``/include/${LIBRARY_NAME}`` are used for compiling the library, 
 # and will be added to consumers' include paths. While PRIVATE 
 # headers are only used to be 
-target_include_directories(${PROJECT_NAME} PRIVATE
+target_include_directories(leveldb PRIVATE
     $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}>
     $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
 )
 
-target_include_directories(${PROJECT_NAME} PUBLIC
+target_include_directories(leveldb PUBLIC
     $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
 )
 
-# Add the hunter libraries that the project requires
-#hunter_add_package(Boost COMPONENTS regex system filesystem)
-#find_package(Boost CONFIG REQUIRED regex system filesystem)
-
-# Threads 
+# Reference Threads library 
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
-target_link_libraries(${PROJECT_NAME} 
+target_link_libraries(leveldb 
     Threads::Threads)
 
-#target_link_libraries(${PROJECT_NAME}
-#    PUBLIC Boost::regex Boost::system Boost::filesystem)
+    
+# Reference windows shell lightweight utility function (WIN32 only)
+if(WIN32)
+    find_library(SHLWAPI Shlwapi.lib) 
+    if(SHLWAPI) 
+        target_link_libraries(leveldb SHLWAPI)
+    else()
+        message(FATAL_ERROR "Failed to find Shlwapi.lib.")
+    endif()
+endif()
+
 
 # TODO: Add unit\integration tests
 
-# TODO: What about install target (do we need this???) 
+# Installation instructions
+install(TARGETS leveldb EXPORT leveldbConfig 
+    LIBRARY DESTINATION "lib"
+    ARCHIVE DESTINATION "lib"
+    RUNTIME DESTINATION "bin"
+    INCLUDES DESTINATION "include"
+)
+
+install(EXPORT leveldbConfig 
+   DESTINATION "lib/cmake/leveldb")
+
+install(FILES ${PROJECT_PUBLIC_HEADERS} DESTINATION "include/leveldb")
+
+
